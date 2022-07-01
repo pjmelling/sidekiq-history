@@ -1,10 +1,6 @@
-require 'sidekiq/util'
-
 module Sidekiq
   module History
     class Middleware
-      include Sidekiq::Util
-
       attr_accessor :msg
 
       def call(_worker, msg, queue)
@@ -23,7 +19,7 @@ module Sidekiq
           started_at: Time.now.utc,
           payload: payload,
           worker: job_class,
-          processor: "#{identity}-#{Thread.current.object_id}",
+          processor: processor,
           queue: queue
         }
 
@@ -79,6 +75,23 @@ module Sidekiq
           else
             Sidekiq::Job
           end
+        end
+      end
+
+      def processor
+        @processor ||= begin
+          actual = Gem.loaded_specs['sidekiq'].version
+
+          identity_source = if Gem::Dependency.new('', '>= 6.5.0').match?('', actual)
+            # Refactored internal API #identity method in class Sidekiq::Util
+            # by moving it to Sidekiq::Component, since 6.5.0.
+            # See: https://bit.ly/3bJFqT9
+            Sidekiq::Component
+          else
+            Sidekiq::Util
+          end
+
+          "#{identity_source.identity}-#{Thread.current.object_id}"
         end
       end
     end
